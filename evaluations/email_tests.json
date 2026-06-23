@@ -1,0 +1,50 @@
+[
+  {
+    "id": "test_interview",
+    "name": "Google Interview Invitation",
+    "subject": "Interview with Google for Software Engineer",
+    "body": "Hi applicant, we were impressed by your resume and would like to schedule a 45-minute technical interview. Please use this calendar link to schedule by Friday, June 26, 2026. Best, Google Recruiting Team.",
+    "expected": {
+      "company": "Google",
+      "role": "Software Engineer",
+      "status": "INTERVIEW",
+      "deadline": "2026-06-26"
+    }
+  },
+  {
+    "id": "test_assessment",
+    "name": "Amazon Coding Assessment",
+    "subject": "Amazon Software Dev Intern Online Assessment",
+    "body": "Thank you for applying to Amazon. We have sent you an invitation to take our Online Coding Assessment. You have 5 days to complete it. The deadline is June 24, 2026. Good luck!",
+    "expected": {
+      "company": "Amazon",
+      "role": "Software Dev Intern",
+      "status": "ASSESSMENT",
+      "deadline": "2026-06-24"
+    }
+  },
+  {
+    "id": "test_offer",
+    "name": "Stripe Job Offer",
+    "subject": "Offer from Stripe!",
+    "body": "Dear candidate, we are thrilled to offer you the position of Frontend Engineer at Stripe. We've attached your offer letter detailing the base salary and equity. Please sign and return it by June 30, 2026.",
+    "expected": {
+      "company": "Stripe",
+      "role": "Frontend Engineer",
+      "status": "OFFER",
+      "deadline": "2026-06-30"
+    }
+  },
+  {
+    "id": "test_rejection",
+    "name": "Meta Application Rejection",
+    "subject": "Your application to Meta",
+    "body": "Thank you for taking the time to interview with Meta. Unfortunately, we will not be moving forward with your application at this time. We will keep your profile in our database for future opportunities.",
+    "expected": {
+      "company": "Meta",
+      "role": "Not available",
+      "status": "REJECTED",
+      "deadline": "Not available"
+    }
+  }
+]
