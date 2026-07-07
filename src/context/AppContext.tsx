@@ -8,7 +8,7 @@ import { fetchEmails, SAMPLE_EMAILS } from "../tools/emailTool";
 import type { EmailMessage } from "../tools/emailTool";
 import { connectGmail } from "../tools/gmailService";
 
-const API_BASE_URL = "http://localhost:5000";
+import API_BASE_URL from "../config/api";
 
 export interface TimelineEvent {
   id: string;

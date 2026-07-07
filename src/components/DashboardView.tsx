@@ -1,5 +1,6 @@
 import React from "react";
 import { useApp } from "../context/AppContext";
+import API_BASE_URL from "../config/api";
 import { 
   Briefcase, 
   Video, 
@@ -88,7 +89,7 @@ export const DashboardView: React.FC<{ setView: (view: string) => void }> = ({ s
   React.useEffect(() => {
     const checkBackend = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/applications?email=test@test.com", { method: "GET" });
+        const res = await fetch(`${API_BASE_URL}/api/applications?email=test@test.com`, { method: "GET" });
         setBackendOnline(res.ok || res.status === 404 || res.status === 400 || res.status === 401 || res.status === 403);
       } catch (e) {
         setBackendOnline(false);
