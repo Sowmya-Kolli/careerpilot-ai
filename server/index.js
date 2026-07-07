@@ -1308,12 +1308,16 @@ app.post('/api/reset', authenticateToken, async (req, res) => {
   }
 });
 
-// Serve static files from the Vite build in production mode
-if (process.env.NODE_ENV === 'production') {
-  console.log('[Server] Running in Production mode. Serving frontend static assets...');
+// Serve React only when explicitly enabled (e.g., local full-stack deployment)
+if (
+  process.env.NODE_ENV === 'production' &&
+  process.env.SERVE_FRONTEND === 'true'
+) {
+  console.log('[Server] Serving frontend static assets...');
+
   const distPath = path.join(__dirname, '../dist');
   app.use(express.static(distPath));
-  
+
   app.get('*', (req, res) => {
     if (req.path.startsWith('/api')) {
       return res.status(404).json({ error: 'API route not found' });
