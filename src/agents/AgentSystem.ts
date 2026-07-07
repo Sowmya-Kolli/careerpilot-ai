@@ -14,6 +14,10 @@ export interface AgentSystemTelemetry {
   guardrailLogs: string[];
   timestamp: string;
   isDuplicateUpdate?: boolean;
+  structuredPayload?: any;
+  type?: string;
+  agent?: string;
+  isDemoLog?: boolean;
   checks?: {
     messageIdChecked?: boolean;
     duplicateScanCompleted?: boolean;

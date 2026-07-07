@@ -24,7 +24,7 @@ export const CalendarView: React.FC = () => {
   applications.forEach((app) => {
     if (app.timeline && Array.isArray(app.timeline)) {
       app.timeline.forEach((evt) => {
-        if (evt.eventType === "REJECTED") return;
+        if (evt.eventType === "REJECTED" || evt.eventType === "PENDING") return;
         if (evt.extractedDate && evt.extractedDate !== "Not available" && evt.extractedDate.trim() !== "") {
           const parsedDate = new Date(evt.extractedDate);
           if (!isNaN(parsedDate.getTime())) {
@@ -119,16 +119,16 @@ export const CalendarView: React.FC = () => {
             <div className="flex items-center gap-3">
               <button
                 onClick={handlePrevMonth}
-                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-500 transition active:scale-95"
+                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-500 transition active:scale-95"
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="font-extrabold text-xs text-slate-800 uppercase tracking-wider min-w-[100px] text-center">
+              <span className="font-extrabold text-xs text-slate-800 dark:text-slate-200 uppercase tracking-wider min-w-[100px] text-center">
                 {monthNames[month]} {year}
               </span>
               <button
                 onClick={handleNextMonth}
-                className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-500 transition active:scale-95"
+                className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-550 transition active:scale-95"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -155,22 +155,22 @@ export const CalendarView: React.FC = () => {
               const hasEvents = dayEvents.length > 0;
               
               // Get dominant event type style
-              let bgClass = "bg-white/40 hover:bg-white/80 border-slate-100";
-              let textClass = "text-slate-700";
+              let bgClass = "bg-white/40 dark:bg-slate-900/40 hover:bg-white/80 dark:hover:bg-slate-900/80 border-slate-100 dark:border-slate-800";
+              let textClass = "text-slate-700 dark:text-slate-300";
               if (hasEvents) {
                 const types = dayEvents.map((e) => e.type);
                 if (types.includes("OFFER")) {
-                  bgClass = "bg-emerald-500/10 hover:bg-emerald-500/15 border-emerald-200";
-                  textClass = "text-emerald-700 font-bold";
+                  bgClass = "bg-emerald-500/10 hover:bg-emerald-500/15 border-emerald-250 dark:border-emerald-900/60";
+                  textClass = "text-emerald-700 dark:text-emerald-400 font-bold";
                 } else if (types.includes("INTERVIEW")) {
-                  bgClass = "bg-blue-500/10 hover:bg-blue-500/15 border-blue-200";
-                  textClass = "text-blue-700 font-bold";
+                  bgClass = "bg-blue-500/10 hover:bg-blue-500/15 border-blue-250 dark:border-blue-900/60";
+                  textClass = "text-blue-700 dark:text-blue-400 font-bold";
                 } else if (types.includes("ASSESSMENT")) {
-                  bgClass = "bg-yellow-500/10 hover:bg-yellow-500/15 border-yellow-250";
-                  textClass = "text-yellow-750 font-bold";
+                  bgClass = "bg-yellow-500/10 hover:bg-yellow-500/15 border-yellow-250 dark:border-yellow-900/60";
+                  textClass = "text-yellow-750 dark:text-yellow-405 font-bold";
                 } else {
-                  bgClass = "bg-purple-500/10 hover:bg-purple-500/15 border-purple-200";
-                  textClass = "text-purple-700 font-bold";
+                  bgClass = "bg-purple-500/10 hover:bg-purple-500/15 border-purple-250 dark:border-purple-900/60";
+                  textClass = "text-purple-700 dark:text-purple-400 font-bold";
                 }
               }
 
@@ -220,66 +220,67 @@ export const CalendarView: React.FC = () => {
           <div className="space-y-3.5 max-h-[420px] overflow-y-auto pr-1 custom-scrollbar">
             {events.length > 0 ? (
               events.map((event) => {
-                let iconColor = "text-slate-500 bg-slate-50 border-slate-105";
+                let badgeClass = "bg-purple-50 text-purple-755 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900";
                 let Icon = Bell;
-                let cardGradient = "from-slate-50/50 to-slate-100/30 border-slate-100";
                 
                 if (event.type === "OFFER") {
-                  iconColor = "text-emerald-700 bg-emerald-100 border-emerald-250";
-                  cardGradient = "from-emerald-50/70 to-emerald-100/20 border-emerald-150/50";
+                  badgeClass = "bg-emerald-50 text-emerald-700 border-emerald-250 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900";
                   Icon = Award;
                 } else if (event.type === "INTERVIEW") {
-                  iconColor = "text-blue-700 bg-blue-100 border-blue-250";
-                  cardGradient = "from-blue-50/70 to-blue-100/20 border-blue-150/50";
+                  badgeClass = "bg-blue-50 text-blue-700 border-blue-250 dark:bg-blue-950/20 dark:text-blue-400 dark:border-blue-900";
                   Icon = Video;
                 } else if (event.type === "ASSESSMENT") {
-                  iconColor = "text-amber-750 bg-amber-100 border-amber-250";
-                  cardGradient = "from-amber-50/70 to-yellow-100/20 border-amber-150/50";
+                  badgeClass = "bg-amber-50 text-amber-700 border-amber-250 dark:bg-amber-950/20 dark:text-amber-400 dark:border-amber-900";
                   Icon = FileCode;
-                } else {
-                  iconColor = "text-purple-700 bg-purple-100 border-purple-250";
-                  cardGradient = "from-purple-50/70 to-purple-100/20 border-purple-150/50";
-                  Icon = Bell;
                 }
 
                 return (
-                  <div
+                  <div 
                     key={event.id}
                     onClick={() => handleEventClick(event.appId)}
-                    className={`group border bg-gradient-to-br hover:shadow-md p-5 rounded-[22px] transition-all duration-300 cursor-pointer flex flex-col space-y-4 hover:-translate-y-0.5 ${cardGradient}`}
+                    className="p-4 bg-white/40 dark:bg-slate-900/40 border border-slate-150/40 dark:border-slate-800/80 hover:border-purple-250 hover:bg-white dark:hover:bg-slate-900 rounded-2xl transition-all duration-200 space-y-4 shadow-sm cursor-pointer"
                   >
-                    <div className="flex items-start justify-between">
-                      {/* Left: Icon & Title */}
-                      <div className="flex items-center gap-3">
-                        <div className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 shadow-sm ${iconColor}`}>
-                          <Icon className="w-4.5 h-4.5" />
-                        </div>
-                        <div>
-                          <h4 className="font-extrabold text-sm text-slate-900 group-hover:text-purple-755 transition leading-tight">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-8.5 h-8.5 rounded-lg border flex items-center justify-center shrink-0 shadow-sm ${badgeClass}`}>
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-[10px] text-slate-405 font-bold uppercase tracking-widest leading-none block mb-1">Company</span>
+                        <div className="flex items-baseline gap-2">
+                          <h4 className="font-extrabold text-xs text-slate-905 dark:text-white leading-none truncate">
                             {event.company}
                           </h4>
-                          <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider block mt-0.5">{event.eventType}</span>
+                          <span className="text-[10px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider block mt-0.5">{event.eventType}</span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-slate-100/60 pt-3.5">
+                    <div className="flex items-center justify-between border-t border-slate-100/60 dark:border-slate-800/80 pt-3.5">
                       <div>
-                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5">Role</span>
-                        <span className="text-xs text-slate-700 font-semibold">{event.role}</span>
+                        <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest block mb-0.5">Role</span>
+                        <span className="text-xs text-slate-700 dark:text-slate-300 font-semibold">{event.role}</span>
                       </div>
                       <div className="text-right">
-                        <span className="text-[9px] font-bold text-slate-405 uppercase tracking-widest block mb-0.5">📅 Date</span>
-                        <span className="text-xs text-slate-700 font-extrabold">{event.dateStr}</span>
+                        <span className="text-[9px] font-bold text-slate-405 dark:text-slate-500 uppercase tracking-widest block mb-0.5">📅 Date</span>
+                        <span className="text-xs text-slate-700 dark:text-slate-205 font-extrabold">{event.dateStr}</span>
                       </div>
                     </div>
                   </div>
                 );
               })
             ) : (
-              <div className="h-48 flex flex-col items-center justify-center text-center p-4 border border-dashed border-slate-200 rounded-2xl">
-                <Calendar className="w-8 h-8 text-slate-350 mb-2" />
-                <span className="text-xs text-slate-450 font-bold uppercase tracking-wider">No milestones yet</span>
+              <div className="glass-card rounded-2xl p-8 text-center space-y-4 shadow-sm flex flex-col items-center justify-center border-dashed border-2 border-purple-200/40">
+                <div className="w-10 h-10 bg-purple-500/10 border border-purple-200/20 rounded-xl flex items-center justify-center text-purple-600 shadow-inner">
+                  <Calendar className="w-5 h-5 text-purple-650" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="font-extrabold text-slate-900 dark:text-white text-xs uppercase tracking-wider">
+                    No Actionable Milestones
+                  </h4>
+                  <p className="text-[10px] text-slate-450 dark:text-slate-500 max-w-[200px] mx-auto leading-relaxed font-semibold">
+                    Schedule details, test tasks, and interview loops will sync dynamically.
+                  </p>
+                </div>
               </div>
             )}
           </div>

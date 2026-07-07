@@ -8,7 +8,6 @@ import {
   Calendar,
   X,
   PlusCircle,
-  Briefcase,
   Clock,
   ArrowLeft,
   ChevronRight,
@@ -22,8 +21,25 @@ import {
   XOctagon,
   Video,
   FileCode,
-  Award
+  Award,
+  Loader2,
+  Download,
+  Upload,
+  User
 } from "lucide-react";
+
+const formatNiceDate = (dateStr: string | undefined) => {
+  if (!dateStr || dateStr === "Not available" || dateStr === "undefined" || dateStr === "null" || dateStr.trim() === "" || dateStr.toLowerCase().includes("invalid")) {
+    return "Not available";
+  }
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  } catch (_) {
+    return dateStr;
+  }
+};
 
 export const TrackerView: React.FC = () => {
   const { 
@@ -33,8 +49,37 @@ export const TrackerView: React.FC = () => {
     updateApplicationStatus,
     selectedAppId,
     setSelectedAppId,
-    toggleStarApplication
+    toggleStarApplication,
+    setView,
+    saveApplicationTasks,
+    generateDraftReply,
+    userName,
+    showToast,
+    gmailConnected
   } = useApp();
+
+  const [showDraftModal, setShowDraftModal] = useState(false);
+  const [draftTone, setDraftTone] = useState("Accept");
+  const [generatedDraft, setGeneratedDraft] = useState("");
+  const [isDrafting, setIsDrafting] = useState(false);
+
+  const handleGenerateDraft = async (emailBody: string, companyName: string) => {
+    setIsDrafting(true);
+    try {
+      const draftText = await generateDraftReply(
+        emailBody, 
+        draftTone, 
+        userName || "Candidate", 
+        companyName
+      );
+      setGeneratedDraft(draftText);
+    } catch (e) {
+      console.error(e);
+      setGeneratedDraft("Failed to generate draft. Please try again.");
+    } finally {
+      setIsDrafting(false);
+    }
+  };
 
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -43,6 +88,110 @@ export const TrackerView: React.FC = () => {
   const [selectedAppIds, setSelectedAppIds] = useState<string[]>([]);
   const [activeTimelineEventId, setActiveTimelineEventId] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [emailViewMode, setEmailViewMode] = useState<"html" | "text">("html");
+
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const handleExportCSV = () => {
+    const rows = [
+      ["Company", "Role", "Status", "Date Type", "Date Value", "Summary", "Next Action", "Confidence", "Match Score"]
+    ];
+
+    applications.forEach((app) => {
+      const displayDate = getDisplayDateInfo(app);
+      rows.push([
+        app.company.replace(/"/g, '""'),
+        app.role.replace(/"/g, '""'),
+        app.currentStatus,
+        displayDate.type,
+        displayDate.value,
+        app.summary.replace(/"/g, '""'),
+        app.nextAction.replace(/"/g, '""'),
+        String(app.confidence || ""),
+        String(app.matchScore || "")
+      ]);
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + rows.map(e => e.map(val => `"${val}"`).join(",")).join("\n");
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `careerpilot_opportunities_${new Date().toISOString().split("T")[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target?.result as string;
+      if (!text) return;
+
+      const lines = text.split("\n").map(line => line.trim()).filter(Boolean);
+      if (lines.length <= 1) return;
+
+      let importedCount = 0;
+      for (let i = 1; i < lines.length; i++) {
+        const matches = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || [];
+        const cleanValues = matches.map(val => val.replace(/^"|"$/g, '').replace(/""/g, '"').trim());
+
+        if (cleanValues.length < 3) continue;
+
+        const company = cleanValues[0];
+        const role = cleanValues[1];
+        const status = cleanValues[2] as JobApplication["status"];
+        const dateType = cleanValues[3] || "Not available";
+        const dateValue = cleanValues[4] || "Not available";
+        const summary = cleanValues[5] || "Imported opportunity.";
+        const nextAction = cleanValues[6] || "Review details.";
+
+        try {
+          await addManualApplication({
+            company,
+            role,
+            status,
+            summary,
+            date: { type: dateType, value: dateValue },
+            nextAction
+          });
+          importedCount++;
+        } catch (err) {
+          console.error("Failed to import row:", err);
+        }
+      }
+
+      showToast({
+        type: "success",
+        message: `📥 Import Completed`,
+        subMessage: `Successfully imported ${importedCount} opportunities from CSV.`,
+        duration: 4000
+      });
+    };
+    reader.readAsText(file);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  React.useEffect(() => {
+    if (selectedAppId) {
+      const targetApp = applications.find(app => app.id === selectedAppId);
+      if (targetApp) {
+        const activeEvent = targetApp.timeline.find(evt => evt.id === activeTimelineEventId) || targetApp.timeline[targetApp.timeline.length - 1];
+        if (activeEvent?.originalEmailHtml) {
+          setEmailViewMode("html");
+        } else {
+          setEmailViewMode("text");
+        }
+      }
+    }
+  }, [selectedAppId, activeTimelineEventId, applications]);
 
   // Form states
   const [formCompany, setFormCompany] = useState("");
@@ -53,35 +202,25 @@ export const TrackerView: React.FC = () => {
   const [formDateValue, setFormDateValue] = useState("");
   const [formNextAction, setFormNextAction] = useState("");
 
-  const getDisplayDateInfo = (app: JobApplication) => {
-    let type = "Deadline";
-    let value = "Not available";
-
-    if (app.status === "OFFER") {
-      type = "Joining Date";
-      value = app.joiningDate || "Not available";
-    } else if (app.status === "INTERVIEW") {
-      type = "Interview Date";
-      value = app.interviewDate || "Not available";
-    } else if (app.status === "ASSESSMENT") {
-      type = "Assessment Deadline";
-      value = app.assessmentDeadline || "Not available";
-    } else {
-      if (app.assessmentDeadline && app.assessmentDeadline !== "Not available") {
-        type = "Assessment Deadline";
-        value = app.assessmentDeadline;
-      } else if (app.interviewDate && app.interviewDate !== "Not available") {
-        type = "Interview Date";
-        value = app.interviewDate;
-      } else if (app.joiningDate && app.joiningDate !== "Not available") {
-        type = "Joining Date";
-        value = app.joiningDate;
-      } else if (app.date && app.date.value !== "Not available") {
-        type = app.date.type;
-        value = app.date.value;
-      }
+  const formatDisplayDate = (dateStr: string) => {
+    if (!dateStr || dateStr === "Not available" || dateStr === "undefined") return "Not available";
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return dateStr;
+      const day = String(d.getDate()).padStart(2, '0');
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const month = months[d.getMonth()];
+      const year = d.getFullYear();
+      return `${day} ${month} ${year}`;
+    } catch (e) {
+      return dateStr;
     }
+  };
 
+  const getDisplayDateInfo = (app: JobApplication) => {
+    const type = "Received";
+    const rawDate = app.emailReceivedDate || app.dateAdded || app.createdAt || "Not available";
+    const value = formatDisplayDate(rawDate);
     return { type, value };
   };
 
@@ -121,8 +260,21 @@ export const TrackerView: React.FC = () => {
   };
 
   const filteredApps = applications.filter((app) => {
-    const matchesSearch = app.company.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          app.role.toLowerCase().includes(searchTerm.toLowerCase());
+    const term = searchTerm.toLowerCase();
+    
+    const matchesCompany = app.company?.toLowerCase().includes(term);
+    const matchesRole = app.role?.toLowerCase().includes(term);
+    const matchesRecruiterName = app.recruiterName?.toLowerCase().includes(term);
+    const matchesRecruiterEmail = app.recruiterEmail?.toLowerCase().includes(term);
+    
+    const matchesTimeline = (app.timeline || []).some(evt => 
+      evt.subject?.toLowerCase().includes(term) ||
+      evt.sender?.toLowerCase().includes(term)
+    );
+    
+    const matchesStatusText = app.status?.toLowerCase().includes(term);
+
+    const matchesSearch = matchesCompany || matchesRole || matchesRecruiterName || matchesRecruiterEmail || matchesTimeline || matchesStatusText;
     const matchesStatus = statusFilter === "ALL" || app.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -293,12 +445,14 @@ export const TrackerView: React.FC = () => {
       from: activeEvent.sender,
       subject: activeEvent.subject,
       receivedDate: activeEvent.receivedDate,
-      body: activeEvent.originalEmail
+      body: activeEvent.originalEmail,
+      bodyHtml: activeEvent.originalEmailHtml
     } : {
       from: `Recruiter <recruiter@${selectedApp.company.toLowerCase().replace(/[^a-z0-9]/g, "") || "company"}.com>`,
       subject: `Application Update - ${selectedApp.role}`,
       receivedDate: selectedApp.dateAdded,
-      body: `No original recruiter email body has been logged for this manually created opportunity. \n\nDirect summary context: ${selectedApp.summary}`
+      body: `No original recruiter email body has been logged for this manually created opportunity. \n\nDirect summary context: ${selectedApp.summary}`,
+      bodyHtml: undefined
     };
 
     // Handled using custom Delete Confirmation Modal overlay
@@ -306,7 +460,7 @@ export const TrackerView: React.FC = () => {
     return (
       <div className="max-w-4xl mx-auto space-y-6 page-entrance">
         {/* Detail Header bar */}
-        <div className="flex items-center justify-between bg-white/40 border border-white/50 p-4.5 rounded-[24px] shadow-sm">
+        <div className="flex items-center justify-between bg-white/40 dark:bg-slate-900/40 border border-white/50 dark:border-slate-800 p-4.5 rounded-[24px] shadow-sm">
           <button
             onClick={() => {
               setSelectedAppId(null);
@@ -348,7 +502,14 @@ export const TrackerView: React.FC = () => {
             <h3 className="text-2xl font-black text-slate-900 leading-none flex items-center gap-2">
               <span>{selectedApp.isStarred ? "⭐ " : ""}{selectedApp.company}</span>
             </h3>
-            <p className="text-xs text-slate-405 font-bold uppercase tracking-wider leading-none">{selectedApp.role}</p>
+            <p className="text-xs text-slate-405 font-bold uppercase tracking-wider leading-none flex items-center gap-2">
+              <span>{selectedApp.role}</span>
+              {selectedApp.matchScore !== undefined && selectedApp.matchScore > 0 && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-purple-50 text-purple-750 border border-purple-200/50 text-[9px] font-extrabold tracking-wide uppercase">
+                  🎯 {Math.round(selectedApp.matchScore * 100)}% Match
+                </span>
+              )}
+            </p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -367,42 +528,70 @@ export const TrackerView: React.FC = () => {
           </div>
         </div>
 
-        {/* 4 Information mini cards */}
+        {/* Information Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {/* Important Date */}
-          <div className="bg-white/50 border border-slate-155/40 p-4 rounded-2xl space-y-1">
-            <div className="flex items-center gap-1.5 text-slate-400 font-bold text-[9px] uppercase tracking-wider">
-              <Calendar className="w-3.5 h-3.5 text-purple-500" />
-              <span>{dateInfo.type}</span>
+          {/* Received Date */}
+          <div className="bg-white/50 dark:bg-slate-900/50 border border-slate-150/40 dark:border-slate-800 p-4 rounded-2xl space-y-1">
+            <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500 font-bold text-[9px] uppercase tracking-wider">
+              <Clock className="w-3.5 h-3.5 text-purple-500" />
+              <span>Received Date</span>
             </div>
-            <span className="text-[11.5px] font-extrabold text-slate-800 block truncate">{dateInfo.value}</span>
+            <span className="text-[11.5px] font-extrabold text-slate-800 dark:text-slate-200 block truncate">
+              {formatNiceDate(selectedApp.emailReceivedDate || origEmail.receivedDate)}
+            </span>
           </div>
 
-          {/* Email Received Date */}
-          <div className="bg-white/50 border border-slate-155/40 p-4 rounded-2xl space-y-1">
-            <div className="flex items-center gap-1.5 text-slate-400 font-bold text-[9px] uppercase tracking-wider">
-              <Clock className="w-3.5 h-3.5 text-purple-500" />
-              <span>Mail Received Date</span>
+          {/* Action / Deadline date if applicable */}
+          <div className="bg-white/50 dark:bg-slate-900/50 border border-slate-150/40 dark:border-slate-800 p-4 rounded-2xl space-y-1">
+            <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500 font-bold text-[9px] uppercase tracking-wider">
+              <Calendar className="w-3.5 h-3.5 text-purple-500" />
+              <span>{dateInfo.type === "Received" ? "Next Action Date" : dateInfo.type}</span>
             </div>
-            <span className="text-[11.5px] font-extrabold text-slate-800 block truncate">{origEmail.receivedDate}</span>
+            <span className="text-[11.5px] font-extrabold text-slate-800 dark:text-slate-200 block truncate">
+              {dateInfo.value && dateInfo.value !== "Not available" ? formatNiceDate(dateInfo.value) : "Not available"}
+            </span>
           </div>
 
           {/* Mode */}
-          <div className="bg-white/50 border border-slate-155/40 p-4 rounded-2xl space-y-1">
-            <div className="flex items-center gap-1.5 text-slate-400 font-bold text-[9px] uppercase tracking-wider">
+          <div className="bg-white/50 dark:bg-slate-900/50 border border-slate-150/40 dark:border-slate-800 p-4 rounded-2xl space-y-1">
+            <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500 font-bold text-[9px] uppercase tracking-wider">
               <Globe className="w-3.5 h-3.5 text-purple-500" />
               <span>Mode</span>
             </div>
-            <span className="text-[11.5px] font-extrabold text-slate-800 block truncate">{selectedApp.mode || "Online"}</span>
+            <span className="text-[11.5px] font-extrabold text-slate-800 dark:text-slate-200 block truncate">{selectedApp.mode || "Online"}</span>
           </div>
 
           {/* Source */}
-          <div className="bg-white/50 border border-slate-155/40 p-4 rounded-2xl space-y-1">
-            <div className="flex items-center gap-1.5 text-slate-405 font-bold text-[9px] uppercase tracking-wider">
+          <div className="bg-white/50 dark:bg-slate-900/50 border border-slate-150/40 dark:border-slate-800 p-4 rounded-2xl space-y-1">
+            <div className="flex items-center gap-1.5 text-slate-400 dark:text-slate-500 font-bold text-[9px] uppercase tracking-wider">
               <FileText className="w-3.5 h-3.5 text-purple-500" />
               <span>Source</span>
             </div>
-            <span className="text-[11.5px] font-extrabold text-slate-800 block truncate">{selectedApp.source || "Gmail"}</span>
+            <span className="text-[11.5px] font-extrabold text-slate-800 dark:text-slate-200 block truncate">{selectedApp.source || "Gmail"}</span>
+          </div>
+        </div>
+
+        {/* Recruiter Details Card */}
+        <div className="glass-card p-6 shadow-sm space-y-4">
+          <div className="flex items-center gap-2 border-b border-slate-100/60 pb-3">
+            <User className="w-4 h-4 text-indigo-500" />
+            <h4 className="font-extrabold text-xs text-slate-900 uppercase tracking-wider">Recruiter Details</h4>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-semibold text-slate-700 dark:text-slate-350">
+            <div className="bg-white/40 dark:bg-slate-900/40 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 space-y-1">
+              <span className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider block">Recruiter Name</span>
+              <span className="text-slate-800 dark:text-slate-200 font-extrabold">{selectedApp.recruiterName || origEmail.from.split('<')[0].replace(/['"]/g, '').trim() || "Not available"}</span>
+            </div>
+            <div className="bg-white/40 dark:bg-slate-900/40 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 space-y-1">
+              <span className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider block">Recruiter Email</span>
+              <span className="text-slate-800 dark:text-slate-200 font-extrabold truncate block" title={selectedApp.recruiterEmail || origEmail.from.match(/<([^>]+)>/)?.[1] || origEmail.from}>
+                {selectedApp.recruiterEmail || origEmail.from.match(/<([^>]+)>/)?.[1] || origEmail.from || "Not available"}
+              </span>
+            </div>
+            <div className="bg-white/40 dark:bg-slate-900/40 p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 space-y-1">
+              <span className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider block">Email Subject</span>
+              <span className="text-slate-800 dark:text-slate-200 font-extrabold truncate block" title={origEmail.subject}>{origEmail.subject || "Not available"}</span>
+            </div>
           </div>
         </div>
 
@@ -414,31 +603,38 @@ export const TrackerView: React.FC = () => {
               <span>Application Timeline</span>
             </h4>
             <div className="space-y-3 pt-1">
-              {selectedApp.timeline.map((evt, idx) => (
-                <div key={evt.id || idx} className="flex items-center justify-between p-3.5 bg-white/40 border border-slate-100 rounded-2xl">
-                  <div className="flex items-center gap-4 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-base shrink-0 shadow-sm">
-                      {getEventIcon(evt.eventType)}
+              {selectedApp.timeline.map((evt, idx) => {
+                const hasExtractedDate = evt.extractedDate && 
+                  evt.extractedDate !== "Not available" && 
+                  evt.extractedDate !== "undefined" && 
+                  evt.extractedDate !== "null" && 
+                  evt.extractedDate.trim() !== "";
+                return (
+                  <div key={evt.id || idx} className="flex items-center justify-between p-3.5 bg-white/40 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800 rounded-2xl">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-100 dark:border-indigo-900/60 flex items-center justify-center text-base shrink-0 shadow-sm">
+                        {getEventIcon(evt.eventType)}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-xs font-extrabold text-slate-800 dark:text-slate-205 block leading-tight truncate">{evt.subject}</span>
+                        <span className="text-[10px] text-slate-450 dark:text-slate-400 font-bold block mt-1">
+                          Received: {formatNiceDate(evt.receivedDate)} {hasExtractedDate ? `| Action Date: ${formatNiceDate(evt.extractedDate)}` : ""}
+                        </span>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <span className="text-xs font-extrabold text-slate-800 block leading-tight truncate">{evt.subject}</span>
-                      <span className="text-[10px] text-slate-450 font-bold block mt-1">
-                        Received: {evt.receivedDate} {evt.extractedDate !== "Not available" && `| Action Date: ${evt.extractedDate}`}
-                      </span>
-                    </div>
+                    <button
+                      onClick={() => setActiveTimelineEventId(evt.id)}
+                      className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition shrink-0 ${
+                        activeEvent?.id === evt.id
+                          ? "bg-purple-650 text-white shadow-sm"
+                          : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300"
+                      }`}
+                    >
+                      View Email
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setActiveTimelineEventId(evt.id)}
-                    className={`px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition shrink-0 ${
-                      activeEvent?.id === evt.id
-                        ? "bg-purple-600 text-white shadow-sm"
-                        : "bg-white border border-slate-200 hover:bg-slate-55 text-slate-600"
-                    }`}
-                  >
-                    View Email
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -452,26 +648,116 @@ export const TrackerView: React.FC = () => {
               <span>Original Recruiter Email</span>
             </h4>
             
-            <div className="border border-slate-200 bg-white rounded-2xl shadow-sm overflow-hidden">
+            <div className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 rounded-2xl shadow-sm overflow-hidden">
               {/* Header Info */}
-              <div className="p-5 border-b border-slate-100 bg-slate-50/30 space-y-2 text-xs">
+              <div className="p-5 border-b border-slate-100 dark:border-slate-850 bg-slate-50/30 dark:bg-slate-900/30 space-y-2 text-xs">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-1">
-                  <span className="text-slate-400 font-bold w-16">From:</span>
-                  <span className="text-slate-800 font-extrabold">{origEmail.from}</span>
+                  <span className="text-slate-400 dark:text-slate-500 font-bold w-16">From:</span>
+                  <span className="text-slate-800 dark:text-slate-200 font-extrabold">{origEmail.from}</span>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-1">
-                  <span className="text-slate-400 font-bold w-16">Subject:</span>
-                  <span className="text-slate-800 font-extrabold">{origEmail.subject}</span>
+                  <span className="text-slate-400 dark:text-slate-500 font-bold w-16">Subject:</span>
+                  <span className="text-slate-800 dark:text-slate-200 font-extrabold">{origEmail.subject}</span>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-1">
-                  <span className="text-slate-400 font-bold w-16">Date:</span>
-                  <span className="text-slate-800 font-extrabold">{origEmail.receivedDate}</span>
+                  <span className="text-slate-400 dark:text-slate-500 font-bold w-16">Date:</span>
+                  <span className="text-slate-800 dark:text-slate-200 font-extrabold">{origEmail.receivedDate}</span>
                 </div>
               </div>
 
-              {/* Divider and Email Body */}
-              <div className="p-6 bg-white text-slate-700 text-xs leading-relaxed font-medium max-h-96 overflow-y-auto custom-scrollbar">
-                {formatEmailBody(origEmail.body)}
+              {/* Toggle Mode Tab Switcher & Draft Response Ingestion */}
+              <div className="flex border-b border-slate-100 dark:border-slate-850 bg-slate-50/50 dark:bg-slate-900/50 p-2.5 gap-2 select-none justify-between items-center">
+                <div className="flex gap-2">
+                  {origEmail.bodyHtml && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setEmailViewMode("html")}
+                        className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${
+                          emailViewMode === "html"
+                            ? "bg-white dark:bg-slate-900 text-purple-750 dark:text-purple-400 shadow-sm border border-slate-150/20 dark:border-slate-800"
+                            : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                        }`}
+                      >
+                        Rich HTML
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEmailViewMode("text")}
+                        className={`px-3 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg transition-all ${
+                          emailViewMode === "text"
+                            ? "bg-white dark:bg-slate-900 text-purple-750 dark:text-purple-400 shadow-sm border border-slate-150/20 dark:border-slate-800"
+                            : "text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                        }`}
+                      >
+                        Plain Text
+                      </button>
+                    </>
+                  )}
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGeneratedDraft("");
+                    setDraftTone(
+                      selectedApp.currentStatus === "INTERVIEW" ? "Accept" :
+                      selectedApp.currentStatus === "OFFER" ? "Accept" :
+                      selectedApp.currentStatus === "ASSESSMENT" ? "Accept" : "Follow Up"
+                    );
+                    setShowDraftModal(true);
+                  }}
+                  className="px-3.5 py-1.5 bg-gradient-to-tr from-purple-650 to-indigo-600 hover:from-purple-700 hover:to-indigo-750 text-white text-[10px] font-extrabold uppercase tracking-wider rounded-lg shadow-sm hover:shadow active:scale-95 transition flex items-center gap-1 shrink-0"
+                >
+                  📩 Draft Response
+                </button>
+              </div>
+
+              {/* Email Body Container */}
+              <div className="p-6 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 text-xs leading-relaxed font-medium max-h-[500px] overflow-y-auto custom-scrollbar">
+                {emailViewMode === "html" && origEmail.bodyHtml ? (
+                  <iframe
+                    sandbox="allow-popups allow-popups-to-escape-sandbox"
+                    srcDoc={`
+                      <!DOCTYPE html>
+                      <html>
+                        <head>
+                          <meta charset="utf-8">
+                          <style>
+                            body {
+                              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                              font-size: 13.5px;
+                              line-height: 1.6;
+                              color: #334155;
+                              background-color: #ffffff;
+                              margin: 8px;
+                              padding: 0;
+                              word-break: break-word;
+                            }
+                            img {
+                              max-width: 100%;
+                              height: auto;
+                            }
+                            a {
+                              color: #6366f1;
+                              text-decoration: underline;
+                            }
+                            a:hover {
+                              color: #4f46e5;
+                            }
+                          </style>
+                        </head>
+                        <body>
+                          ${origEmail.bodyHtml}
+                        </body>
+                      </html>
+                    `}
+                    title="Email Content"
+                    className="w-full min-h-[380px] border-0 rounded-xl bg-white"
+                  />
+                ) : (
+                  formatEmailBody(origEmail.body)
+                )}
               </div>
             </div>
           </div>
@@ -527,12 +813,26 @@ export const TrackerView: React.FC = () => {
                       ];
                   }
                 })();
-                return recs.map((line, idx) => (
-                  <div key={idx} className="flex items-start gap-2.5 p-3 bg-white/40 border border-slate-100 rounded-xl">
-                    <input type="checkbox" defaultChecked disabled className="w-4 h-4 mt-0.5 rounded text-purple-650 focus:ring-purple-500" />
-                    <span className="text-xs font-semibold text-slate-700">✓ {line}</span>
-                  </div>
-                ));
+                const checkedTasks = selectedApp.checkedTasks || [];
+                return recs.map((line, idx) => {
+                  const isChecked = checkedTasks.includes(line);
+                  return (
+                    <label key={idx} className="flex items-start gap-2.5 p-3 bg-white/40 border border-slate-100 hover:border-purple-200 rounded-xl cursor-pointer select-none transition-all duration-200">
+                      <input 
+                        type="checkbox" 
+                        checked={isChecked} 
+                        onChange={() => {
+                          const updated = isChecked
+                            ? checkedTasks.filter(t => t !== line)
+                            : [...checkedTasks, line];
+                          saveApplicationTasks(selectedApp.id, updated);
+                        }}
+                        className="w-4 h-4 mt-0.5 rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer" 
+                      />
+                      <span className={`text-xs font-semibold text-slate-700 transition ${isChecked ? "line-through text-slate-400 font-medium" : ""}`}>{line}</span>
+                    </label>
+                  );
+                });
               })()}
             </div>
           </div>
@@ -574,6 +874,117 @@ export const TrackerView: React.FC = () => {
             </div>
           </div>
         )}
+
+        {/* AI Recruiter Response Draft Generator Modal */}
+        {showDraftModal && selectedApp && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/30 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowDraftModal(false)}>
+            <div className="bg-white rounded-[32px] border border-slate-100 shadow-2xl max-w-xl w-full overflow-hidden animate-in zoom-in-95 duration-250 flex flex-col max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+              
+              {/* Modal Header */}
+              <div className="px-8 py-6 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-purple-50/50 to-blue-50/20">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-purple-100 border border-purple-200/50 flex items-center justify-center text-purple-655 shadow-sm animate-pulse">
+                    📩
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 text-sm">Response Assistant</h3>
+                    <p className="text-[9px] text-slate-405 font-bold uppercase tracking-wider">AI Recruiter Draft Generator</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setShowDraftModal(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="flex-1 p-8 space-y-6 overflow-y-auto custom-scrollbar">
+                
+                {/* Draft configurations options */}
+                <div className="flex items-end gap-4 bg-slate-50 p-4 border border-slate-100 rounded-2xl">
+                  <div className="flex-1 space-y-1.5">
+                    <label className="text-[9px] font-bold text-slate-455 uppercase tracking-widest block">Response Type (Tone)</label>
+                    <select
+                      value={draftTone}
+                      onChange={(e) => setDraftTone(e.target.value)}
+                      className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-75"
+                    >
+                      <option value="Accept">Accept Interview/Offer</option>
+                      <option value="Reschedule">Request Rescheduling</option>
+                      <option value="Decline">Decline / Withdraw Application</option>
+                      <option value="Follow Up">Check Status / General Inquiry</option>
+                    </select>
+                  </div>
+
+                  <button
+                    onClick={() => handleGenerateDraft(origEmail.body, selectedApp.company)}
+                    disabled={isDrafting}
+                    className="px-5 py-2.5 bg-purple-650 hover:bg-purple-750 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow-md transition active:scale-95 shrink-0 flex items-center gap-1.5"
+                  >
+                    {isDrafting ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                        <span>Drafting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Generate Draft</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Textarea displaying generated draft */}
+                <div className="space-y-2">
+                  <label className="text-[9px] font-bold text-slate-405 uppercase tracking-widest block">Generated Email Reply</label>
+                  {generatedDraft ? (
+                    <div className="space-y-3">
+                      <textarea
+                        value={generatedDraft}
+                        rows={10}
+                        onChange={(e) => setGeneratedDraft(e.target.value)}
+                        className="w-full p-4.5 bg-slate-900 border border-slate-800 rounded-2xl text-purple-200 font-mono text-[10.5px] leading-relaxed custom-scrollbar focus:outline-none"
+                      />
+                      
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(generatedDraft);
+                          showToast({
+                            type: "success",
+                            message: "📋 Copied to Clipboard",
+                            subMessage: "You can now paste the email reply directly into Gmail",
+                            duration: 3550
+                          });
+                        }}
+                        className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs rounded-xl shadow-sm transition"
+                      >
+                        Copy to Clipboard
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="p-12 border border-dashed border-slate-200 rounded-2xl text-center text-xs text-slate-400 font-semibold bg-slate-50/20 italic">
+                      Click 'Generate Draft' to write a contextual email response based on recruiter details.
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-8 py-4 bg-slate-55 border-t border-slate-100 flex justify-end">
+                <button
+                  onClick={() => setShowDraftModal(false)}
+                  className="px-4 py-2 border border-slate-200 hover:bg-slate-100 text-xs font-bold rounded-xl transition text-slate-605"
+                >
+                  Close
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -592,13 +1003,38 @@ export const TrackerView: React.FC = () => {
               <h2 className="text-xl font-black text-slate-900 leading-none">Applications Tracker</h2>
               <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1.5">Select a category folder to view and manage opportunities</p>
             </div>
-            <button
-              onClick={() => setShowAddDrawer(true)}
-              className="px-4.5 py-2.5 btn-premium text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-md transition"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Application</span>
-            </button>
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImportCSV}
+                accept=".csv"
+                className="hidden"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="px-3.5 py-2.5 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-600 dark:text-slate-400 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition active:scale-[0.98]"
+                title="Import from CSV file"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>Import CSV</span>
+              </button>
+              <button
+                onClick={handleExportCSV}
+                className="px-3.5 py-2.5 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-600 dark:text-slate-400 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition active:scale-[0.98]"
+                title="Export to CSV file"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export CSV</span>
+              </button>
+              <button
+                onClick={() => setShowAddDrawer(true)}
+                className="px-4.5 py-2.5 btn-premium text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-md transition"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Application</span>
+              </button>
+            </div>
           </div>
 
           {/* Top Section: category folders grid */}
@@ -673,6 +1109,21 @@ export const TrackerView: React.FC = () => {
                     <span>Delete Selected ({selectedAppIds.length})</span>
                   </button>
                 )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3.5 py-2.5 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-600 dark:text-slate-400 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition active:scale-[0.98]"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Import CSV</span>
+                </button>
+                <button
+                  onClick={handleExportCSV}
+                  className="px-3.5 py-2.5 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-600 dark:text-slate-400 text-xs font-semibold rounded-xl flex items-center gap-1.5 transition active:scale-[0.98]"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>Export CSV</span>
+                </button>
                 <button
                   onClick={() => setShowAddDrawer(true)}
                   className="px-4.5 py-2.5 btn-premium text-white text-xs font-semibold rounded-xl flex items-center gap-1.5 shadow-md transition"
@@ -680,6 +1131,7 @@ export const TrackerView: React.FC = () => {
                   <Plus className="w-4 h-4" />
                   <span>Add Application</span>
                 </button>
+              </div>
               </div>
             </div>
           </div>
@@ -774,6 +1226,11 @@ export const TrackerView: React.FC = () => {
                       </span>
                       <span className="text-xs text-slate-500 font-medium block mt-1 truncate">
                         {app.role}
+                        {app.matchScore !== undefined && app.matchScore > 0 && (
+                          <span className="ml-2.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 border border-purple-200/50 text-[9px] font-extrabold tracking-wide">
+                            🎯 {Math.round(app.matchScore * 100)}% Match
+                          </span>
+                        )}
                       </span>
                     </div>
 
@@ -808,14 +1265,48 @@ export const TrackerView: React.FC = () => {
               })}
             </div>
           ) : (
-            <div className="glass-card rounded-[24px] p-16 text-center space-y-4 shadow-sm py-20 flex flex-col items-center justify-center w-full">
-              <div className="w-12 h-12 bg-gradient-to-br from-purple-50 to-blue-50 rounded-2xl flex items-center justify-center mx-auto text-purple-650 shadow-inner">
-                <Briefcase className="w-5 h-5" />
+            <div className="glass-card rounded-[32px] p-16 text-center space-y-6 shadow-md py-24 flex flex-col items-center justify-center w-full border-dashed border-2 border-purple-200/40">
+              <div className="w-16 h-16 bg-gradient-to-tr from-purple-50 to-indigo-50 border border-purple-100 rounded-2xl flex items-center justify-center mx-auto text-purple-655 shadow-inner">
+                <FolderOpen className="w-8 h-8 text-purple-600" />
               </div>
-              <div className="space-y-1">
-                <h4 className="font-extrabold text-slate-905 text-sm">
-                  Your opportunities will appear here
+              
+              <div className="space-y-1.5">
+                <h4 className="font-extrabold text-slate-900 dark:text-white text-sm">
+                  No Job Applications Yet
                 </h4>
+                <p className="text-xs text-slate-450 dark:text-slate-500 max-w-sm mx-auto leading-relaxed font-semibold">
+                  {gmailConnected 
+                    ? "Start an inbox sync scan or manually log your first opportunity to begin tracking."
+                    : "Connect Gmail to begin tracking your recruitment journey."
+                  }
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                {gmailConnected ? (
+                  <button
+                    onClick={() => setView("intelligence")}
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-md transition active:scale-95"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>Scan Recruiter Emails</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setView("settings")}
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-750 text-white font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-md transition active:scale-95"
+                  >
+                    <Mail className="w-4 h-4" />
+                    <span>Connect Gmail Ingest</span>
+                  </button>
+                )}
+                
+                <button
+                  onClick={() => setShowAddDrawer(true)}
+                  className="px-6 py-2.5 bg-white dark:bg-slate-900 border border-slate-250 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-700 dark:text-slate-300 font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition active:scale-95"
+                >
+                  <span>Add Application</span>
+                </button>
               </div>
             </div>
           )}
@@ -950,6 +1441,8 @@ export const TrackerView: React.FC = () => {
           </div>
         </div>
       )}
+
+
 
     </div>
   );

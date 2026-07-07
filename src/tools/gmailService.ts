@@ -6,6 +6,7 @@ export interface GmailMessageDetail {
   senderEmail: string;
   subject: string;
   body: string;
+  bodyHtml?: string;
   receivedDate: string;
   threadId?: string;
 }
@@ -30,62 +31,50 @@ function decodeBase64Url(base64url: string): string {
 }
 
 /**
- * Recursively extracts plain text (or stripped HTML) body from a Gmail message payload.
+ * Traverses Gmail message parts recursively and extracts both plain text and HTML.
  */
-function getMessageBody(payload: any): string {
-  if (!payload) return "";
+function extractEmailContent(payload: any): { body: string; bodyHtml: string } {
+  let body = "";
+  let bodyHtml = "";
 
-  // If text/plain mimeType is at root
+  if (!payload) return { body, bodyHtml };
+
+  const traverseParts = (parts: any[]) => {
+    for (const part of parts) {
+      if (part.mimeType === "text/plain" && part.body && part.body.data) {
+        body = decodeBase64Url(part.body.data);
+      } else if (part.mimeType === "text/html" && part.body && part.body.data) {
+        bodyHtml = decodeBase64Url(part.body.data);
+      }
+      if (part.parts && part.parts.length > 0) {
+        traverseParts(part.parts);
+      }
+    }
+  };
+
   if (payload.mimeType === "text/plain" && payload.body && payload.body.data) {
-    return decodeBase64Url(payload.body.data);
+    body = decodeBase64Url(payload.body.data);
+  } else if (payload.mimeType === "text/html" && payload.body && payload.body.data) {
+    bodyHtml = decodeBase64Url(payload.body.data);
   }
 
-  // If text/html is at root
-  if (payload.mimeType === "text/html" && payload.body && payload.body.data) {
-    const html = decodeBase64Url(payload.body.data);
-    return sanitizeEmailContent(html);
-  }
-
-  // If nested parts exist
   if (payload.parts && payload.parts.length > 0) {
-    return getPartBody(payload.parts);
+    traverseParts(payload.parts);
   }
 
-  return "";
-}
-
-function getPartBody(parts: any[]): string {
-  // First priority: find a plain text part
-  for (const part of parts) {
-    if (part.mimeType === "text/plain" && part.body && part.body.data) {
-      return decodeBase64Url(part.body.data);
-    }
+  // If HTML exists but plain text is missing, generate it by sanitizing HTML
+  if (bodyHtml && !body) {
+    body = sanitizeEmailContent(bodyHtml);
   }
 
-  // Second priority: search recursively in sub-parts
-  for (const part of parts) {
-    if (part.parts && part.parts.length > 0) {
-      const body = getPartBody(part.parts);
-      if (body) return body;
-    }
-  }
-
-  // Third priority: fallback to text/html and run sanitizer
-  for (const part of parts) {
-    if (part.mimeType === "text/html" && part.body && part.body.data) {
-      const html = decodeBase64Url(part.body.data);
-      return sanitizeEmailContent(html);
-    }
-  }
-
-  return "";
+  return { body, bodyHtml };
 }
 
 /**
- * Initializes and retrieves the Google Identity Services token client.
+ * Initializes and retrieves the Google Identity Services code client.
  */
-export const getGoogleTokenClient = (
-  onTokenReceived: (resp: { access_token: string }) => void,
+export const getGoogleCodeClient = (
+  onCodeReceived: (code: string) => void,
   onError: (err: any) => void
 ) => {
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -101,16 +90,18 @@ export const getGoogleTokenClient = (
   }
 
   try {
-    const client = win.google.accounts.oauth2.initTokenClient({
+    const client = win.google.accounts.oauth2.initCodeClient({
       client_id: clientId,
       scope: "https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email",
-      callback: (tokenResponse: any) => {
-        if (tokenResponse.error) {
-          onError(tokenResponse);
-        } else if (tokenResponse.access_token) {
-          onTokenReceived(tokenResponse);
+      ux_mode: "popup",
+      select_account: true,
+      callback: (response: any) => {
+        if (response.error) {
+          onError(response);
+        } else if (response.code) {
+          onCodeReceived(response.code);
         } else {
-          onError(new Error("No access token was returned."));
+          onError(new Error("No authorization code was returned."));
         }
       },
       error_callback: (err: any) => {
@@ -125,36 +116,13 @@ export const getGoogleTokenClient = (
 };
 
 /**
- * Fetches the user profile info from Google OAuth2 userinfo endpoint.
+ * Connects Gmail by opening the GIS OAuth popup and retrieving authorization code.
  */
-export const fetchUserProfile = async (accessToken: string) => {
-  const res = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
-    headers: { Authorization: `Bearer ${accessToken}` }
-  });
-  if (!res.ok) {
-    throw new Error("Failed to retrieve profile info. Access token may be invalid or expired.");
-  }
-  return await res.json();
-};
-
-/**
- * Connects Gmail by opening the GIS OAuth popup and retrieving token and profile info.
- */
-export const connectGmail = (): Promise<{ access_token: string; email: string; name: string; picture: string }> => {
+export const connectGmail = (): Promise<{ code: string }> => {
   return new Promise((resolve, reject) => {
-    const client = getGoogleTokenClient(
-      async (tokenResponse) => {
-        try {
-          const profile = await fetchUserProfile(tokenResponse.access_token);
-          resolve({
-            access_token: tokenResponse.access_token,
-            email: profile.email,
-            name: profile.name || profile.email.split("@")[0],
-            picture: profile.picture || ""
-          });
-        } catch (err: any) {
-          reject(err);
-        }
+    const client = getGoogleCodeClient(
+      (code) => {
+        resolve({ code });
       },
       (err: any) => {
         if (err.error === "access_denied") {
@@ -168,7 +136,7 @@ export const connectGmail = (): Promise<{ access_token: string; email: string; n
     );
 
     if (client) {
-      client.requestAccessToken({ prompt: "consent" });
+      client.requestCode();
     }
   });
 };
@@ -223,7 +191,7 @@ export const fetchGmailEmails = async (accessToken: string, limit: number = 50):
       }
 
       // Ignore common newsletter/advertisement terms in subject/body
-      const body = getMessageBody(message.payload);
+      const { body, bodyHtml } = extractEmailContent(message.payload);
       const lowerSubject = subject.toLowerCase();
       const lowerBody = body.toLowerCase();
       if (
@@ -270,6 +238,7 @@ export const fetchGmailEmails = async (accessToken: string, limit: number = 50):
         senderEmail,
         subject,
         body,
+        bodyHtml,
         receivedDate,
         threadId: message.threadId
       });

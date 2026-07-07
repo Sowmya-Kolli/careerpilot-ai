@@ -1,479 +1,225 @@
-import React, { useState } from "react";
+import React from "react";
 import { useApp } from "../context/AppContext";
 import { 
   Terminal, 
-  ShieldCheck, 
-  Play, 
   Cpu, 
-  Clock,
-  FileCheck,
-  Zap,
-  Mail,
-  Tag,
-  Building,
-  Lightbulb,
-  Lock,
-  RefreshCw,
-  ArrowDown
+  Mail
 } from "lucide-react";
 
 export const AgentActivityView: React.FC = () => {
   const { 
     activityLogs, 
-    evaluations, 
-    isEvaluating, 
-    runSystemEvaluations,
     clearLogs 
   } = useApp();
-
-  const [selectedLogIndex] = useState<number>(0);
-
-  // Evaluation calculations
-  const totalEvals = evaluations.length;
-  const passedEvals = evaluations.filter((e) => e.passed).length;
-  const accuracy = totalEvals > 0 ? Math.round((passedEvals / totalEvals) * 100) : 0;
-  const avgLatency = totalEvals > 0 ? Math.round(evaluations.reduce((acc, curr) => acc + curr.latencyMs, 0) / totalEvals) : 0;
 
   // Sort logs by timestamp newest first
   const sortedLogs = React.useMemo(() => {
     return [...activityLogs].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [activityLogs]);
 
-  // Selected active log telemetry
-  const activeLog = sortedLogs.length > 0 && selectedLogIndex < sortedLogs.length
-    ? sortedLogs[selectedLogIndex]
-    : sortedLogs.length > 0 ? sortedLogs[0] : null;
-
   return (
-    <div className="space-y-8 page-entrance">
+    <div className="v2-page-container space-y-8 animate-in fade-in duration-300">
       
-      {/* Metrics Row */}
-      <section className="grid md:grid-cols-2 gap-6">
+      {/* Header section */}
+      <div className="flex justify-between items-center border-b border-slate-200/50 dark:border-slate-800/80 pb-4">
+        <div>
+          <h2 className="text-2xl font-black text-slate-900 dark:text-white leading-none">
+            Agent Activity Console
+          </h2>
+          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1.5">
+            Real-time multi-agent execution telemetry and security validation
+          </p>
+        </div>
         
-        {/* Run Evaluation Box */}
-        <div className="glass-card p-6 rounded-[24px] shadow-sm flex flex-col justify-between space-y-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <Cpu className="w-5 h-5 text-purple-650" />
-              <h3 className="font-extrabold text-slate-900 text-sm">Evaluation System</h3>
-            </div>
-            <p className="text-[11px] text-slate-450 leading-relaxed font-semibold">
-              Execute diagnostic test suites using `evaluations/email_tests.json` to evaluate agent classification, company resolution accuracy, and response latencies.
-            </p>
-          </div>
+        {activityLogs.length > 0 && (
+          <button
+            onClick={clearLogs}
+            className="px-3.5 py-2 border border-slate-250 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-655 dark:text-slate-400 text-xs font-semibold rounded-xl transition active:scale-95 shadow-sm"
+          >
+            Clear Telemetry Logs
+          </button>
+        )}
+      </div>
 
-          <div className="flex items-center gap-3">
-            <button
-              onClick={runSystemEvaluations}
-              disabled={isEvaluating}
-              className="px-4.5 py-2.5 btn-premium text-white font-semibold rounded-xl text-xs flex items-center gap-2 transition"
-            >
-              {isEvaluating ? (
-                <>
-                  <Zap className="w-4 h-4 animate-spin text-white" />
-                  <span>Evaluating Sandbox...</span>
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4 text-white" fill="white" />
-                  <span>Run Sandbox Evaluations</span>
-                </>
-              )}
-            </button>
-          </div>
+      {/* Main Console content */}
+      <section className="space-y-6">
+        
+        {/* Terminal Header */}
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 text-slate-400 rounded-t-2xl border-b border-slate-850 text-[10px] font-mono font-bold uppercase tracking-wider">
+          <Terminal className="w-3.5 h-3.5 text-purple-400" />
+          <span>Active Ingestion Streams & Telemetries</span>
         </div>
 
-        {/* Evaluation Summary Stats */}
-        <div className="glass-card p-6 rounded-[24px] shadow-sm flex flex-col justify-between space-y-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <FileCheck className="w-5 h-5 text-purple-650" />
-              <h3 className="font-extrabold text-slate-900 text-sm">Evaluation Results</h3>
-            </div>
-            <p className="text-[10px] text-slate-450 font-bold uppercase tracking-wider">Diagnostic telemetry summary from the last runs</p>
-          </div>
-
-          {totalEvals > 0 ? (
-            <div className="grid grid-cols-3 gap-4 border-t border-slate-100 pt-3">
-              <div className="space-y-1">
-                <span className="text-[9px] text-slate-400 font-bold block uppercase tracking-widest leading-none">Accuracy</span>
-                <span className={`text-lg font-black leading-none ${accuracy === 100 ? "text-emerald-600" : "text-purple-650"}`}>
-                  {accuracy}%
-                </span>
-              </div>
-              <div className="space-y-1">
-                <span className="text-[9px] text-slate-400 font-bold block uppercase tracking-widest leading-none">Latency</span>
-                <span className="text-lg font-black text-slate-900 leading-none">{avgLatency}ms</span>
-              </div>
-              <div className="space-y-1">
-                <span className="text-[9px] text-slate-400 font-bold block uppercase tracking-widest leading-none">Pass Rate</span>
-                <span className="text-lg font-black text-slate-900 leading-none">{passedEvals}/{totalEvals}</span>
-              </div>
-            </div>
-          ) : (
-            <div className="text-xs text-slate-400 py-2 italic font-semibold">
-              No evaluation test runs executed in this session.
-            </div>
-          )}
-        </div>
-
-      </section>
-
-      {/* Live Evaluations Panel */}
-      {evaluations.length > 0 && (
-        <section className="glass-card rounded-[24px] p-6 shadow-sm space-y-4 animate-in fade-in duration-200">
-          <div>
-            <h3 className="font-extrabold text-slate-900 text-sm">Test Suite Report</h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Telemetry outputs mapped from evaluations/email_tests.json</p>
-          </div>
-          <div className="overflow-x-auto custom-scrollbar">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-slate-50/50 border-b border-slate-150">
-                  <th className="py-2.5 px-4 font-bold text-slate-450 uppercase tracking-widest text-[9px]">Test Case</th>
-                  <th className="py-2.5 px-4 font-bold text-slate-455 uppercase tracking-widest text-[9px]">Expected status</th>
-                  <th className="py-2.5 px-4 font-bold text-slate-455 uppercase tracking-widest text-[9px]">Actual status</th>
-                  <th className="py-2.5 px-4 font-bold text-slate-455 uppercase tracking-widest text-[9px]">Company status</th>
-                  <th className="py-2.5 px-4 font-bold text-slate-455 uppercase tracking-widest text-[9px]">Latency</th>
-                  <th className="py-2.5 px-4 font-bold text-slate-455 uppercase tracking-widest text-[9px] text-right">Verdict</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
-                {evaluations.map((report) => (
-                  <tr key={report.id} className="hover:bg-slate-50/40">
-                    <td className="py-3 px-4 font-bold text-slate-800">{report.name}</td>
-                    <td className="py-3 px-4 text-slate-450 font-bold uppercase tracking-wide text-[10px]">{report.expectedStatus}</td>
-                    <td className="py-3 px-4 font-bold text-[10px] uppercase">
-                      <span className={report.statusMatch ? "text-purple-650" : "text-rose-500"}>
-                        {report.actualStatus}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-slate-700">
-                      <span className={report.companyMatch ? "" : "text-rose-500 font-bold"}>
-                        {report.actualCompany}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-slate-400 font-semibold">{report.latencyMs}ms</td>
-                    <td className="py-3 px-4 text-right">
-                      <span className={`px-2.5 py-0.75 rounded-full font-bold text-[9px] ${
-                        report.passed 
-                          ? "bg-gradient-to-r from-emerald-500 to-teal-400 text-white shadow-sm" 
-                          : "bg-gradient-to-r from-rose-500 to-red-400 text-white shadow-sm"
-                      }`}>
-                        {report.passed ? "PASS" : "FAIL"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {/* Visual Autonomous Agent Workflow Pipeline */}
-      {activeLog && activeLog.result && (
-        <section className="glass-card p-6 rounded-[24px] shadow-sm space-y-6">
-          <div>
-            <h3 className="font-extrabold text-slate-900 text-sm">Gemini Agent Activity</h3>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Sequential Multi-Agent Execution Flow</p>
-          </div>
-
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 p-4.5 bg-slate-50/40 border border-slate-150/40 rounded-2xl">
-            {/* Step 1: Ingest */}
-            <div className="flex flex-col items-center text-center space-y-1 md:w-1/7">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-650">
-                <Mail className="w-5 h-5 animate-pulse" />
-              </div>
-              <span className="text-[10px] font-black text-slate-800 uppercase block">Email Ingest</span>
-              <span className="text-[9px] text-slate-400 font-bold uppercase truncate max-w-[80px]">{activeLog.result.company}</span>
-            </div>
-
-            <ArrowDown className="w-4 h-4 text-slate-300 md:rotate-270 shrink-0" />
-
-            {/* Step 2: Filter */}
-            <div className="flex flex-col items-center text-center space-y-1 md:w-1/7">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-650">
-                <ShieldCheck className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] font-black text-slate-800 uppercase block">Monitor Check</span>
-              <span className="text-[9px] text-emerald-600 font-black uppercase">Job Related</span>
-            </div>
-
-            <ArrowDown className="w-4 h-4 text-slate-300 md:rotate-270 shrink-0" />
-
-            {/* Step 3: Classifier */}
-            <div className="flex flex-col items-center text-center space-y-1 md:w-1/7">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-650">
-                <Tag className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] font-black text-slate-800 uppercase block">Classification</span>
-              <span className="text-[9px] text-purple-600 font-black uppercase">{activeLog.result.status}</span>
-            </div>
-
-            <ArrowDown className="w-4 h-4 text-slate-300 md:rotate-270 shrink-0" />
-
-            {/* Step 4: Summary */}
-            <div className="flex flex-col items-center text-center space-y-1 md:w-1/7">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-650">
-                <Building className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] font-black text-slate-800 uppercase block">Extraction</span>
-              <span className="text-[9px] text-slate-450 font-bold uppercase truncate max-w-[80px]">{activeLog.result.role}</span>
-            </div>
-
-            <ArrowDown className="w-4 h-4 text-slate-300 md:rotate-270 shrink-0" />
-
-            {/* Step 5: Action */}
-            <div className="flex flex-col items-center text-center space-y-1 md:w-1/7">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-650">
-                <Lightbulb className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] font-black text-slate-800 uppercase block">Next Action</span>
-              <span className="text-[9px] text-slate-400 font-bold uppercase truncate max-w-[80px]" title={activeLog.result.nextAction}>Guidelines</span>
-            </div>
-
-            <ArrowDown className="w-4 h-4 text-slate-300 md:rotate-270 shrink-0" />
-
-            {/* Step 6: Guardrails */}
-            <div className="flex flex-col items-center text-center space-y-1 md:w-1/7">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-650">
-                <Lock className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] font-black text-slate-800 uppercase block">Guardrails</span>
-              <span className="text-[9px] text-emerald-600 font-black uppercase">{activeLog.guardrailStatus}</span>
-            </div>
-
-            <ArrowDown className="w-4 h-4 text-slate-300 md:rotate-270 shrink-0" />
-
-            {/* Step 7: Update */}
-            <div className="flex flex-col items-center text-center space-y-1 md:w-1/7">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-650">
-                <RefreshCw className="w-5 h-5" />
-              </div>
-              <span className="text-[10px] font-black text-slate-800 uppercase block">Board Sync</span>
-              <span className="text-[9px] text-purple-600 font-black uppercase">Completed</span>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Split grid: Skills & Activity Timelines */}
-      <div className="grid lg:grid-cols-12 gap-8 items-start">
-        
-        {/* Left Column: Agent Modules */}
-        <section className="lg:col-span-5 space-y-6">
-          <div className="glass-card p-6 rounded-[24px] shadow-sm space-y-5">
-            <div>
-              <h3 className="font-extrabold text-slate-905 text-sm">Agent Modules</h3>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Active autonomous pipelines</p>
-            </div>
-
-            <div className="space-y-4">
-              {/* Module 1: Email Scanner */}
-              <div className="flex items-start gap-3.5 p-4 bg-white/60 border border-slate-100 hover:border-purple-200 rounded-2xl shadow-sm hover:shadow transition-all duration-200">
-                <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-lg shrink-0">
-                  📩
-                </div>
-                <div>
-                  <h4 className="font-bold text-xs text-slate-805">Email Scanner Agent</h4>
-                  <p className="text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">Processed recruiter emails from inbox streams.</p>
-                </div>
-              </div>
-
-              {/* Module 2: Gemini Analyzer */}
-              <div className="flex items-start gap-3.5 p-4 bg-white/60 border border-slate-100 hover:border-purple-200 rounded-2xl shadow-sm hover:shadow transition-all duration-200">
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-lg shrink-0">
-                  🧠
-                </div>
-                <div>
-                  <h4 className="font-bold text-xs text-slate-805">Gemini Analyzer Agent</h4>
-                  <p className="text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">Extracted company name, position role, and key dates.</p>
-                </div>
-              </div>
-
-              {/* Module 3: Calendar Agent */}
-              <div className="flex items-start gap-3.5 p-4 bg-white/60 border border-slate-100 hover:border-purple-200 rounded-2xl shadow-sm hover:shadow transition-all duration-200">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-lg shrink-0">
-                  📅
-                </div>
-                <div>
-                  <h4 className="font-bold text-xs text-slate-805">Calendar Agent</h4>
-                  <p className="text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">Created status milestones and syncs calendar schedules.</p>
-                </div>
-              </div>
-
-              {/* Module 4: Duplicate Guard Agent */}
-              <div className="flex items-start gap-3.5 p-4 bg-white/60 border border-slate-100 hover:border-purple-200 rounded-2xl shadow-sm hover:shadow transition-all duration-200">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-lg shrink-0">
-                  🛡️
-                </div>
-                <div>
-                  <h4 className="font-bold text-xs text-slate-850">Duplicate Guard Agent</h4>
-                  <p className="text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">Prevented repeated entries by matching message fingerprints.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Right Column: Execution Logs */}
-        <section className="lg:col-span-7">
-          <div className="glass-card p-6 rounded-[24px] shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-extrabold text-slate-900 text-sm">Recent Agent Runs</h3>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Execution checkpoints of recruitment agent workflows</p>
-              </div>
-              {activityLogs.length > 0 && (
-                <button 
-                  onClick={clearLogs} 
-                  className="px-3 py-1.5 border border-slate-200 hover:bg-slate-50 text-[10px] text-slate-505 font-extrabold uppercase tracking-wide rounded-xl transition active:scale-[0.98]"
+        {/* Logs List Container */}
+        <div className="space-y-4">
+          {sortedLogs.length > 0 ? (
+            sortedLogs.map((log, idx) => {
+              const hasStructured = log.structuredPayload && typeof log.structuredPayload === "object";
+              const isGmailScan = hasStructured && log.structuredPayload.stats;
+              const isSuccess = log.guardrailStatus === "PASSED";
+              
+              return (
+                <div 
+                  key={idx}
+                  className="glass-card p-6 rounded-2xl hover:border-purple-250 transition duration-200 space-y-4"
                 >
-                  Clear Logs
-                </button>
-              )}
-            </div>
-
-            <div className="space-y-4 overflow-y-auto max-h-[500px] pr-1 custom-scrollbar">
-              {sortedLogs.length > 0 ? (
-                sortedLogs.map((log, index) => {
-                  const dateObj = new Date(log.timestamp);
-                  const todayStr = new Date().toDateString();
-                  const logDateStr = dateObj.toDateString();
-                  const dateFormatted = logDateStr === todayStr 
-                    ? `Today ${dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                    : `${dateObj.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-
-                  return (
-                    <div 
-                      key={index} 
-                      className="border border-slate-100 bg-white/60 hover:bg-white p-5 rounded-[22px] shadow-sm hover:shadow-md transition-all duration-300 space-y-4"
-                    >
-                      {/* Date Header */}
-                      <div className="flex items-center gap-2 text-[10px] text-slate-450 font-bold uppercase tracking-wider border-b border-slate-100 pb-3">
-                        <Clock className="w-3.5 h-3.5" />
-                        <span>{dateFormatted}</span>
+                  {/* Log meta header */}
+                  <div className="flex justify-between items-center border-b border-slate-100/60 dark:border-slate-800/80 pb-3">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-8.5 h-8.5 rounded-lg border flex items-center justify-center shrink-0 shadow-sm ${
+                        isSuccess 
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/20 dark:text-emerald-400 dark:border-emerald-900" 
+                          : "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/20 dark:text-purple-400 dark:border-purple-900"
+                      }`}>
+                        <Cpu className="w-4.5 h-4.5" />
                       </div>
+                      <div>
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase block tracking-wider leading-none mb-1">Agent Action</span>
+                        <h4 className="text-xs font-extrabold text-slate-905 dark:text-white leading-none capitalize">
+                          {log.agent ? log.agent.replace("-", " ") : "System Sync"}
+                        </h4>
+                      </div>
+                    </div>
+                    <div className="text-right flex items-center gap-4">
+                      <span className="text-[10px] font-bold text-slate-455 dark:text-slate-500 font-mono">
+                        {new Date(log.timestamp).toLocaleTimeString()}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-[8px] font-bold tracking-widest uppercase ${
+                        isSuccess 
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900" 
+                          : "bg-purple-50 text-purple-755 border border-purple-100 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-900"
+                      }`}>
+                        {log.guardrailStatus || "PASSED"}
+                      </span>
+                    </div>
+                  </div>
 
-                      {/* Main Message */}
-                      <div className="space-y-3.5">
-                        <div className="flex items-start gap-2">
-                          <span className="text-sm shrink-0">✨</span>
-                          <span className="font-extrabold text-xs text-slate-800 leading-tight">
-                            {log.result 
-                              ? `Gemini analyzed ${log.result.company} email`
-                              : "Gemini analyzed email header (Filtered: Unrelated content)"}
+                  {/* Core Payload content */}
+                  {hasStructured ? (
+                    isGmailScan ? (
+                      /* Structured Gmail Scan Card */
+                      <div className="space-y-4 font-semibold">
+                        <div className="flex items-center gap-2">
+                          <Mail className="w-4 h-4 text-purple-500" />
+                          <span className="font-extrabold text-xs text-slate-905 dark:text-white">
+                            Gmail Inbox Scanning Agent Run
                           </span>
                         </div>
 
-                        {log.result && (
-                          <div className="space-y-3 pl-6">
+                        <div className="pl-6 space-y-4">
+                          {/* Chronological steps list */}
+                          <div className="relative pl-5 border-l-2 border-slate-100 dark:border-slate-805 space-y-2.5 my-3">
+                            {log.structuredPayload.steps.map((stepStr: string, sIdx: number) => {
+                              return (
+                                <div key={sIdx} className="relative text-[10px] text-slate-650 dark:text-slate-400 leading-relaxed font-bold">
+                                  <span className="absolute -left-[24px] top-0.5 w-3 h-3 bg-emerald-500 rounded-full flex items-center justify-center text-white text-[7px] font-black shadow-sm">
+                                    ✓
+                                  </span>
+                                  <span>{stepStr}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Quick statistics checklist */}
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50/50 dark:bg-slate-950/40 p-4 rounded-xl border border-slate-100 dark:border-slate-850 text-[10px] text-slate-600 dark:text-slate-400">
+                            <div>📥 Scanned: <span className="font-bold text-slate-900 dark:text-white">{log.structuredPayload.stats.emailsScanned}</span></div>
+                            <div>🎯 Match: <span className="font-bold text-slate-900 dark:text-white">{log.structuredPayload.stats.careerEmailsDetected} recruiter</span></div>
+                            <div>✨ Created: <span className="font-bold text-emerald-600 dark:text-emerald-400">{log.structuredPayload.stats.newApplicationsAdded} apps</span></div>
+                            <div>🔄 Updated: <span className="font-bold text-indigo-650 dark:text-indigo-400">{log.structuredPayload.stats.existingApplicationsUpdated} apps</span></div>
+                            <div>📋 Tasks: <span className="font-bold text-teal-650 dark:text-teal-400">{log.structuredPayload.stats.tasksCreated} tasks</span></div>
+                            <div>📅 Events: <span className="font-bold text-indigo-600 dark:text-indigo-400">{log.structuredPayload.stats.calendarEventsCreated} calendar</span></div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Structured Manual Run Card */
+                      <div className="space-y-4 font-semibold">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base shrink-0">📧</span>
+                          <span className="font-extrabold text-xs text-slate-905 dark:text-white">
+                            Recruitment Email Intel Analysis
+                          </span>
+                        </div>
+
+                        <div className="pl-6 space-y-2">
+                          <div className="flex justify-between items-center text-xs">
                             <div>
-                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Result:</span>
-                              <span className="text-xs text-slate-805 font-extrabold capitalize">{log.result.status.toLowerCase().replace("_", " ")} detected</span>
+                              <span className="font-black text-slate-850 dark:text-white block">{log.structuredPayload.company}</span>
+                              <span className="text-[10px] text-slate-455 dark:text-slate-400 font-bold block">{log.structuredPayload.role}</span>
                             </div>
+                            <span className={`text-[9px] font-black px-2 py-0.5 rounded ${
+                              log.structuredPayload.category === 'OFFER' ? 'bg-emerald-100 text-emerald-800' :
+                              log.structuredPayload.category === 'INTERVIEW' ? 'bg-indigo-100 text-indigo-800' :
+                              log.structuredPayload.category === 'ASSESSMENT' ? 'bg-purple-100 text-purple-800' :
+                              'bg-slate-100 text-slate-855'
+                            }`}>
+                              {log.structuredPayload.category}
+                            </span>
+                          </div>
 
-                            <div className="space-y-3.5 pt-2 border-t border-slate-100/60">
-                              <span className="text-[9px] font-black text-slate-450 uppercase block tracking-wider mb-2">Agent Execution Details</span>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] font-semibold text-slate-655">
-                                
-                                {/* Gmail Scanner Agent */}
-                                <div className="p-3 bg-purple-50/20 border border-purple-100/40 rounded-xl space-y-1">
-                                  <span className="text-[9px] font-black text-purple-600 uppercase block tracking-wider">Gmail Scanner Agent</span>
-                                  <div className="space-y-0.5 text-slate-705 text-[10px]">
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-emerald-600 font-extrabold">✓</span>
-                                      <span>Emails retrieved</span>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Gemini Analyzer Agent */}
-                                <div className="p-3 bg-indigo-50/20 border border-indigo-100/40 rounded-xl space-y-1">
-                                  <span className="text-[9px] font-black text-indigo-650 uppercase block tracking-wider">Gemini Analyzer Agent</span>
-                                  <div className="space-y-0.5 text-slate-705 text-[10px]">
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-emerald-600 font-extrabold">✓</span>
-                                      <span>Classification completed</span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-emerald-600 font-extrabold">✓</span>
-                                      <span>Information extracted</span>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Timeline Agent */}
-                                <div className="p-3 bg-blue-50/20 border border-blue-100/40 rounded-xl space-y-1">
-                                  <span className="text-[9px] font-black text-blue-650 uppercase block tracking-wider">Timeline Agent</span>
-                                  <div className="space-y-0.5 text-slate-705 text-[10px]">
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-emerald-600 font-extrabold">✓</span>
-                                      <span>Existing records checked</span>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-emerald-600 font-extrabold">✓</span>
-                                      <span>History updated</span>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Duplicate Guard Agent */}
-                                <div className="p-3 bg-emerald-50/20 border border-emerald-100/40 rounded-xl space-y-1">
-                                  <span className="text-[9px] font-black text-emerald-650 uppercase block tracking-wider">Duplicate Guard Agent</span>
-                                  <div className="space-y-0.5 text-slate-705 text-[10px]">
-                                    <div className="flex items-center gap-1">
-                                      <span className="text-emerald-600 font-extrabold">✓</span>
-                                      <span>Message IDs verified</span>
-                                    </div>
-                                  </div>
-                                </div>
-
+                          {/* Chronological steps list */}
+                          <div className="relative pl-5 border-l-2 border-slate-100 dark:border-slate-805 space-y-2.5 my-3">
+                            {log.structuredPayload.steps.map((stepStr: string, sIdx: number) => (
+                              <div key={sIdx} className="relative text-[10px] text-slate-655 dark:text-slate-400 leading-relaxed font-bold">
+                                <span className="absolute -left-[24px] top-0.5 w-3 h-3 bg-emerald-500 rounded-full flex items-center justify-center text-white text-[7px] font-black shadow-sm">
+                                  ✓
+                                </span>
+                                <span>{stepStr}</span>
                               </div>
+                            ))}
+                          </div>
+
+                          <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-950/40 p-3 rounded-xl border border-slate-100 dark:border-slate-850 text-[10px] text-slate-500">
+                            <div>
+                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5 leading-none">Confidence</span>
+                              <span className="text-xs font-black text-slate-800 dark:text-slate-205">{Math.round(log.structuredPayload.confidence * 100)}%</span>
                             </div>
-
-                            <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
-                              <div>
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5 font-sans leading-none">Confidence score</span>
-                                <span className="text-xs font-black text-slate-800">{Math.round(log.result.confidence * 100)}%</span>
-                              </div>
-                              <div className="text-right">
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5 font-sans leading-none">Status:</span>
-                                <span className="text-xs font-extrabold text-emerald-600">Completed</span>
-                              </div>
+                            <div className="text-right">
+                              <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5 leading-none">Status</span>
+                              <span className="text-xs font-extrabold text-emerald-600">Completed</span>
                             </div>
                           </div>
-                        )}
-                        
-                        {!log.result && (
-                          <div className="pl-6">
-                            <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-100">
-                              <div>
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5 font-sans leading-none">Verdict</span>
-                                <span className="text-xs font-bold text-slate-500">Unrelated message</span>
-                              </div>
-                              <div className="text-right">
-                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5 font-sans leading-none">Status:</span>
-                                <span className="text-xs font-extrabold text-slate-500">Skipped</span>
-                              </div>
-                            </div>
-                          </div>
-                        )}
+                        </div>
+                      </div>
+                    )
+                  ) : (
+                    /* Flat system log or custom legacy log */
+                    <div className="space-y-3 pl-6">
+                      <div className="flex items-start gap-2">
+                        <span className="text-xs shrink-0">⚙️</span>
+                        <div className="space-y-1">
+                          <span className="text-[9px] font-bold text-slate-400 uppercase block tracking-wider leading-none">
+                            System
+                          </span>
+                          <span className="font-semibold text-xs text-slate-700 dark:text-slate-300 leading-normal block">
+                            {log.logs && log.logs[0] ? log.logs[0] : "Refreshed workspace metrics."}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  );
-                })
-              ) : (
-                <div className="h-64 flex flex-col items-center justify-center text-center p-4 border border-dashed border-slate-200 rounded-2xl">
-                  <Terminal className="w-8 h-8 text-slate-350 mb-2 animate-pulse" />
-                  <span className="text-xs text-slate-450 font-bold uppercase tracking-wider">Run your first AI scan</span>
+                  )}
                 </div>
-              )}
+              );
+            })
+          ) : (
+            <div className="glass-card rounded-[24px] p-20 text-center space-y-4 shadow-sm border-dashed border-2 border-purple-200/40">
+              <div className="w-12 h-12 bg-purple-500/10 border border-purple-200/20 rounded-2xl flex items-center justify-center mx-auto text-purple-600 shadow-inner">
+                <Terminal className="w-6 h-6 text-purple-650" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-extrabold text-slate-905 dark:text-white text-sm">
+                  No Telemetry Available
+                </h4>
+                <p className="text-xs text-slate-455 dark:text-slate-500 max-w-xs mx-auto leading-relaxed font-semibold">
+                  Logs from pipeline executions and agent classification steps will appear here in real-time.
+                </p>
+              </div>
             </div>
-          </div>
-        </section>
-      </div>
+          )}
+        </div>
+      </section>
+
     </div>
   );
 };
